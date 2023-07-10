@@ -2,52 +2,61 @@
 import fs from 'fs';
 
 import 'dotenv/config';
-import webdriver from 'selenium-webdriver';
+import { Builder, By, until } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
 
 import { print_msg, pause } from './helpers/msgs_inquirer.js';
+import { read_next_docindex, save_next_docindex } from './helpers/json_controls.js';
+import { read_xlsx } from './helpers/read_xlsx.js';
 
 
 const download_folder = 'C:\\Users\\maval\\OneDrive\\Documentos\\mis_proyectos\\Javascript\\bot-richy\\downloads';
+const renamed_documents_folder = 'C:\\Users\\maval\\OneDrive\\Documentos\\mis_proyectos\\Javascript\\bot-richy\\documents';
 
-const move_to_download_page = async(driver) => {
+const move_to_download_page = async (driver) => {
     await driver.get(process.env.URL); //? Ingresar a la página
 
-    print_msg('Ingresando a la página', process.env.URL);
+    print_msg('\nIngresando a la página', process.env.URL);
+
+    await driver.sleep(2000);
 
     //? ---- Ingresa los datos para iniciar sesión ---- ?//
-    const user_input = await driver.findElement(webdriver.By.id('usuario'));
-    const ci_input = await driver.findElement(webdriver.By.id('ciAdicional'));
-    const password_input = await driver.findElement(webdriver.By.id('password'));
+    const user_input = await driver.findElement(By.id('usuario'));
+    const ci_input = await driver.findElement(By.id('ciAdicional'));
+    const password_input = await driver.findElement(By.id('password'));
     
     await user_input.sendKeys(process.env.USUARIO);
     await ci_input.sendKeys(process.env.CI_ADICIONAL);
     await password_input.sendKeys(process.env.CONTRASENA);
 
+    await driver.sleep(2000);
+
     //? ---- Le da click al botón de iniciar sesión ---- ?//
-    const login_button = await driver.findElement(webdriver.By.id('kc-login'));
+    const login_button = await driver.findElement(By.id('kc-login'));
     await login_button.click();
 
-    await driver.sleep(5000);
-
     //? ---- Ingresa a la sección de facturación electrónica ---- ?//
-    const btn_facuras = await driver.findElement(
-        webdriver.By.xpath('//span[@class="sri-menu-icon-facturacion-electronica"]//parent::button')
+    const btn_facuras = await driver.wait(
+        until.elementLocated(
+            By.xpath('//span[@class="sri-menu-icon-facturacion-electronica"]//parent::button')
+        )
     );
+
+    await driver.sleep(2000);
     
     await btn_facuras.click();
     
     //? ---- Ingresa a la sección de consultas ---- ?//
     const btn_consultas = await driver.findElement(
-        webdriver.By.xpath('//span[text()="Consultas"]//parent::a')
+        By.xpath('//span[text()="Consultas"]//parent::a')
     );
     await btn_consultas.click();
 
-    await driver.sleep(4000);
+    await driver.sleep(2000);
 
     //? ---- Ingresa a la sección de comprobantes electrónicos recibidos ---- ?//
     const a_recibos = await driver.findElement(
-        webdriver.By.xpath('//a[text()="Comprobantes electrónicos recibidos"]')
+        By.xpath('//a[text()="Comprobantes electrónicos recibidos"]')
     );
 
     await a_recibos.click();
@@ -57,28 +66,47 @@ const move_to_download_page = async(driver) => {
     await driver.sleep(1000);
 }
 
-const download_file = async(driver, nro_autorizacion, folder) => {
+const download_file = async (driver, nro_autorizacion, folder, new_folder) => {
     //? ---- Ingresa el número de autorización ---- ?//
     await driver.executeScript(`document.getElementById('frmPrincipal:txtParametro').value = '${nro_autorizacion}'`);
 
     await driver.sleep(1000);
 
     //? ---- Le da click al botón de consultar ---- ?//
-    const btn_consultar = await driver.findElement(webdriver.By.id('btnRecaptcha'));
+    const btn_consultar = await driver.findElement(By.id('btnRecaptcha'));
 
     await btn_consultar.click();
+
+    //? ---- Resuelve el captcha ---- ?//
+    const timeoutMilliseconds = 5000; // Tiempo límite de espera en milisegundos
     
-    print_msg('Un captcha ha sido detectado, por favor resuelvalo manualmente');
-    await pause();
+    const captchaElement = await driver.wait(
+        until.elementLocated(By.xpath('//iframe[@title="El reCAPTCHA caduca dentro de dos minutos"]')), timeoutMilliseconds
+    ).catch((e) => {
+        console.error(e);
+        return null;
+    });
+
+    if (captchaElement) {
+        await driver.sleep(1000);
+        try {
+            const isCaptchaVisible = await captchaElement.isDisplayed();
+            if (isCaptchaVisible) {
+                print_msg('Un captcha ha sido detectado, por favor resuelvalo manualmente');
+                await pause();
+            }
+            
+        } catch (error) {}
+    }
     
     await driver.sleep(1000);
 
     //? ---- Descargar el documento ---- ?//
-    const btn_descargar = await driver.findElement(webdriver.By.id('frmPrincipal:tablaCompRecibidos:0:lnkXml'));
+    const btn_descargar = await driver.findElement(By.id('frmPrincipal:tablaCompRecibidos:0:lnkXml'));
     
     await btn_descargar.click();
 
-    await driver.sleep(10000);
+    await driver.sleep(1000);
 
     const files = fs.readdirSync(folder);
     const fileName = files[0];
@@ -86,7 +114,19 @@ const download_file = async(driver, nro_autorizacion, folder) => {
     fs.renameSync(`${folder}\\${fileName}`, `./documents\\${nro_autorizacion}.xml`);
 }
 
-const download_files = async(folder) => {
+const get_next_doc = () => {
+    const next_docindex = read_next_docindex('./data/next_docindex.json');
+
+    const data = read_xlsx('./data/excel.xlsx');
+
+    const next_doc = data[next_docindex - 1];
+
+    save_next_docindex('./data/next_docindex.json', next_docindex + 1);
+
+    return next_doc;
+}
+
+const download_files = async(folder, new_folder) => {
     if (!process.env.URL)
         throw new Error('El "url" no ha sido definido en el archivo .env');
     if (!process.env.USUARIO)
@@ -96,34 +136,34 @@ const download_files = async(folder) => {
     if (!process.env.CONTRASENA)
         throw new Error('La "contraseña" no ha sido definida en el archivo .env');
 
-    const driver = new webdriver.Builder()
+    const driver = new Builder()
         .forBrowser('chrome')
         .setChromeOptions(new chrome.Options().setUserPreferences({
-            'download.default_directory': folder,
-            'download.prompt_for_download': false,
-            'download.directory_upgrade': true,
-            'safebrowsing.enabled': true
+            'download.default_directory': folder
         }))
         .build();
 
     await move_to_download_page(driver);
 
     //? ---- Selecciona la opción de número de autorización ---- ?//
-    const btn_nro_autorizacion = await driver.findElement(webdriver.By.id('frmPrincipal:opciones:2'));
+    const btn_nro_autorizacion = await driver.findElement(By.id('frmPrincipal:opciones:2'));
 
     await btn_nro_autorizacion.click();
 
-    await driver.sleep(1000);
+    await driver.sleep(10000);
 
-    let nro_autorizacion = '3105202201099252674200120370050008332564126153313';
+    //? ---- Descarga los documentos (bucle largo) ---- ?//
+    let next_doc = get_next_doc();
+    
+    while (next_doc) {
+        const nro_autorizacion = next_doc['Clave de Acceso'];
 
-    await download_file(driver, nro_autorizacion, folder);
+        await download_file(driver, nro_autorizacion, folder, new_folder);
 
-    nro_autorizacion = '3105202201099252674200120480020010657524126153318'
-
-    await download_file(driver, nro_autorizacion, folder);
+        next_doc = get_next_doc();
+    }
     
     await driver.quit();
 }
 
-download_files(download_folder);
+download_files(download_folder, renamed_documents_folder);
