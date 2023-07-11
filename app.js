@@ -1,5 +1,6 @@
 
 import fs from 'fs';
+import url from 'url';
 
 import 'dotenv/config';
 import { Builder, By, until } from 'selenium-webdriver';
@@ -10,8 +11,7 @@ import { read_next_docindex, save_next_docindex } from './helpers/json_controls.
 import { read_xlsx } from './helpers/read_xlsx.js';
 
 
-const download_folder = 'C:\\Users\\maval\\OneDrive\\Documentos\\mis_proyectos\\Javascript\\bot-richy\\downloads';
-const renamed_documents_folder = 'C:\\Users\\maval\\OneDrive\\Documentos\\mis_proyectos\\Javascript\\bot-richy\\documents';
+const download_folder = url.fileURLToPath(new URL('./downloads', import.meta.url));
 
 const move_to_download_page = async (driver) => {
     await driver.get(process.env.URL); //? Ingresar a la página
@@ -88,7 +88,7 @@ const download_file = async (driver, nro_autorizacion, folder, new_folder) => {
     });
 
     if (captchaElement) {
-        await driver.sleep(1000);
+        await driver.sleep(1500);
         try {
             const isCaptchaVisible = await captchaElement.isDisplayed();
             if (isCaptchaVisible) {
@@ -111,7 +111,7 @@ const download_file = async (driver, nro_autorizacion, folder, new_folder) => {
     const files = fs.readdirSync(folder);
     const fileName = files[0];
 
-    fs.renameSync(`${folder}\\${fileName}`, `./documents\\${nro_autorizacion}.xml`);
+    fs.renameSync(`${folder}\\${fileName}`, `${new_folder}\\${nro_autorizacion}.xml`);
 }
 
 const get_next_doc = () => {
@@ -121,9 +121,13 @@ const get_next_doc = () => {
 
     const next_doc = data[next_docindex - 1];
 
-    save_next_docindex('./data/next_docindex.json', next_docindex + 1);
-
     return next_doc;
+}
+
+const sum_next_docindex = () => {
+    const next_docindex = read_next_docindex('./data/next_docindex.json');
+
+    save_next_docindex('./data/next_docindex.json', next_docindex + 1);
 }
 
 const download_files = async(folder, new_folder) => {
@@ -135,6 +139,8 @@ const download_files = async(folder, new_folder) => {
         throw new Error('El "CI adicional" no ha sido definido en el archivo .env');
     if (!process.env.CONTRASENA)
         throw new Error('La "contraseña" no ha sido definida en el archivo .env');
+    if (!process.env.DOCUMENTS_FOLDER)
+        throw new Error('El folder de documentos no ha sido definido en el archivo .env');
 
     const driver = new Builder()
         .forBrowser('chrome')
@@ -156,9 +162,14 @@ const download_files = async(folder, new_folder) => {
     let next_doc = get_next_doc();
     
     while (next_doc) {
+
+        print_msg(`Descargando el documento ${next_doc['#']}\n`);
+
         const nro_autorizacion = next_doc['Clave de Acceso'];
 
         await download_file(driver, nro_autorizacion, folder, new_folder);
+
+        sum_next_docindex();
 
         next_doc = get_next_doc();
     }
@@ -166,4 +177,4 @@ const download_files = async(folder, new_folder) => {
     await driver.quit();
 }
 
-download_files(download_folder, renamed_documents_folder);
+download_files(download_folder, process.env.DOCUMENTS_FOLDER);
