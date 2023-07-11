@@ -56,7 +56,7 @@ const move_to_download_page = async (driver) => {
 
     //? ---- Ingresa a la sección de comprobantes electrónicos recibidos ---- ?//
     const a_recibos = await driver.findElement(
-        By.xpath('//a[text()="Comprobantes electrónicos recibidos"]')
+        By.xpath('//a[text()="Comprobantes electrónicos emitidos"]')
     );
 
     await a_recibos.click();
@@ -102,7 +102,7 @@ const download_file = async (driver, nro_autorizacion, folder, new_folder) => {
     await driver.sleep(3000);
 
     //? ---- Descargar el documento ---- ?//
-    const btn_descargar = await driver.findElement(By.id('frmPrincipal:tablaCompRecibidos:0:lnkXml'));
+    const btn_descargar = await driver.findElement(By.id('frmPrincipal:tablaCompEmitidos:0:lnkXml'));
     
     await btn_descargar.click();
 
