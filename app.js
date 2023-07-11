@@ -99,7 +99,7 @@ const download_file = async (driver, nro_autorizacion, folder, new_folder) => {
         } catch (error) {}
     }
     
-    await driver.sleep(1000);
+    await driver.sleep(3000);
 
     //? ---- Descargar el documento ---- ?//
     const btn_descargar = await driver.findElement(By.id('frmPrincipal:tablaCompRecibidos:0:lnkXml'));
@@ -152,7 +152,7 @@ const download_files = async(folder, new_folder) => {
     await move_to_download_page(driver);
 
     //? ---- Selecciona la opción de número de autorización ---- ?//
-    const btn_nro_autorizacion = await driver.findElement(By.id('frmPrincipal:opciones:2'));
+    const btn_nro_autorizacion = await driver.findElement(By.id('frmPrincipal:opciones:1'));
 
     await btn_nro_autorizacion.click();
 
