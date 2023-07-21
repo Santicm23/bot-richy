@@ -1,6 +1,7 @@
 
 import fs from 'fs';
 import url from 'url';
+import path from 'path';
 
 import 'dotenv/config';
 import { Builder, By, until } from 'selenium-webdriver';
@@ -9,6 +10,7 @@ import chrome from 'selenium-webdriver/chrome.js';
 import { print_msg, pause } from './helpers/msgs_inquirer.js';
 import { read_next_docindex, save_next_docindex } from './helpers/json_controls.js';
 import { read_xlsx } from './helpers/read_xlsx.js';
+import { installExtension } from './helpers/install_extension.js';
 
 
 const download_folder = url.fileURLToPath(new URL('./downloads', import.meta.url));
@@ -81,11 +83,10 @@ const download_file = async (driver, nro_autorizacion, folder, new_folder) => {
     const timeoutMilliseconds = 5000; // Tiempo límite de espera en milisegundos
     
     const captchaElement = await driver.wait(
-        until.elementLocated(By.xpath('//iframe[@title="El reCAPTCHA caduca dentro de dos minutos"]')), timeoutMilliseconds
-    ).catch((e) => {
-        console.error(e);
-        return null;
-    });
+        until.elementLocated(By.xpath(
+            '//iframe[@src="https://www.google.com/recaptcha/api2/bframe?hl=en&v=iRvKkcsnpNcOYYwhqaQxPITz&k=6Lc6rokUAAAAAJBG2M1ZM1LIgJ85DwbSNNjYoLDk"]'
+        )), timeoutMilliseconds
+    ).catch(() => null);
 
     if (captchaElement) {
         await driver.sleep(1500);
@@ -111,7 +112,10 @@ const download_file = async (driver, nro_autorizacion, folder, new_folder) => {
     const files = fs.readdirSync(folder);
     const fileName = files[0];
 
-    fs.renameSync(`${folder}\\${fileName}`, `${new_folder}\\${nro_autorizacion}.xml`);
+    const old_path = path.join(folder, fileName);
+    const new_path = path.join(new_folder, `${nro_autorizacion}.xml`);
+
+    fs.renameSync(old_path, new_path);
 }
 
 const get_next_doc = () => {
@@ -130,7 +134,7 @@ const sum_next_docindex = () => {
     save_next_docindex('./data/next_docindex.json', next_docindex + 1);
 }
 
-const download_files = async(folder, new_folder) => {
+const download_files = async (folder, new_folder) => {
     if (!process.env.URL)
         throw new Error('El "url" no ha sido definido en el archivo .env');
     if (!process.env.USUARIO)
@@ -148,33 +152,43 @@ const download_files = async(folder, new_folder) => {
             'download.default_directory': folder
         }))
         .build();
-
-    await move_to_download_page(driver);
-
-    //? ---- Selecciona la opción de número de autorización ---- ?//
-    const btn_nro_autorizacion = await driver.findElement(By.id('frmPrincipal:opciones:1'));
-
-    await btn_nro_autorizacion.click();
-
-    await driver.sleep(10000);
-
-    //? ---- Descarga los documentos (bucle largo) ---- ?//
-    let next_doc = get_next_doc();
     
-    while (next_doc) {
+    try {
 
-        print_msg(`Descargando el documento ${next_doc['#']}\n`);
+        await installExtension(driver);
 
-        const nro_autorizacion = next_doc['Clave de Acceso'];
+        await driver.sleep(3000);
 
-        await download_file(driver, nro_autorizacion, folder, new_folder);
+        await move_to_download_page(driver);
+    
+        //? ---- Selecciona la opción de número de autorización ---- ?//
+        const btn_nro_autorizacion = await driver.findElement(By.id('frmPrincipal:opciones:1'));
+    
+        await btn_nro_autorizacion.click();
+    
+        await driver.sleep(3000);
+    
+        //? ---- Descarga los documentos (bucle largo) ---- ?//
+        let next_doc = get_next_doc();
+        
+        while (next_doc) {
+    
+            print_msg(`Descargando el documento ${next_doc['#']}\n`);
+    
+            const nro_autorizacion = next_doc['Clave de Acceso'];
+    
+            await download_file(driver, nro_autorizacion, folder, new_folder);
+    
+            sum_next_docindex();
+    
+            next_doc = get_next_doc();
+        }
+    } finally {
+        await driver.sleep(5000);
 
-        sum_next_docindex();
-
-        next_doc = get_next_doc();
+        // await driver.quit();
     }
-    
-    await driver.quit();
 }
 
-download_files(download_folder, process.env.DOCUMENTS_FOLDER);
+
+await download_files(download_folder, process.env.DOCUMENTS_FOLDER);
