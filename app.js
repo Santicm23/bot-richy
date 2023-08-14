@@ -52,6 +52,8 @@ const move_to_download_page = async (driver) => {
     const btn_consultas = await driver.findElement(
         By.xpath('//span[text()="Consultas"]//parent::a')
     );
+    await driver.sleep(1000);
+
     await btn_consultas.click();
 
     await driver.sleep(2000);
