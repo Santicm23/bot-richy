@@ -83,10 +83,11 @@ const download_file = async (driver, nro_autorizacion, folder, new_folder) => {
     const timeoutMilliseconds = 5000; // Tiempo límite de espera en milisegundos
     
     const captchaElement = await driver.wait(
-        until.elementLocated(By.xpath(
-            '//iframe[@src="https://www.google.com/recaptcha/api2/bframe?hl=en&v=iRvKkcsnpNcOYYwhqaQxPITz&k=6Lc6rokUAAAAAJBG2M1ZM1LIgJ85DwbSNNjYoLDk"]'
-        )), timeoutMilliseconds
-    ).catch(() => null);
+        until.elementLocated(By.xpath('//iframe[@title]')), timeoutMilliseconds
+    ).catch((e) => {
+        console.error(e);
+        return null;
+    });
 
     if (captchaElement) {
         await driver.sleep(1500);
